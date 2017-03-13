@@ -94,6 +94,12 @@ data Form where
          -> {lb : Level}
          -> Rype (CCons c la ra) lb
          -> Form c (lmax la lb)
+    FPair : {c : Ctx}
+         -> {lh : Level}
+         -> (rh : Rype c lh)
+         -> {lt : Level}
+         -> Rype (CCons c lh rh) lt
+         -> Form c (lmax lh lt)
 
 data Rype where
     RWeaken : {c : Ctx}
@@ -292,6 +298,7 @@ substituteForm (FRype l) tv i = FRype l
 substituteForm FNever tv i = FNever
 substituteForm FUnit tv i = FUnit
 substituteForm (FFunc ra rb) tv i = FFunc (substituteRype ra tv i) (substituteRype rb tv (IPop i))
+substituteForm (FPair rh rt) tv i = FPair (substituteRype rh tv i) (substituteRype rt tv (IPop i))
 
 substituteRype (RWeaken rr) tv ITop = rr
 substituteRype (RWeaken rr) tv (IPop i) = RWeaken (substituteRype rr tv i)
@@ -308,6 +315,10 @@ reorderForm {c} {l} {FUnit} (IPop ix) iy = refl
 reorderForm {c} {_} {FFunc ra rb} ITop iy =
     cong2ImplHet (reorderForm ITop iy) (reorderForm (IPop ITop) iy)
 reorderForm {c} {_} {FFunc ra rb} (IPop ix) iy =
+    cong2ImplHet (reorderForm (IPop ix) iy) (reorderForm (IPop (IPop ix)) iy)
+reorderForm {c} {_} {FPair rh rt} ITop iy =
+    cong2ImplHet (reorderForm ITop iy) (reorderForm (IPop ITop) iy)
+reorderForm {c} {_} {FPair rh rt} (IPop ix) iy =
     cong2ImplHet (reorderForm (IPop ix) iy) (reorderForm (IPop (IPop ix)) iy)
 
 reorderRype {_} {_} {RWeaken r} ITop iy = refl
@@ -340,6 +351,66 @@ tapp : {c : Ctx}
     -> (ta : Term c la ra)
     -> Term c lb (substituteRype rb ta ITop)
 
+{-
+tbust : {c : Ctx}
+     -> {lh : Level}
+     -> {rh : Rype c lh}
+     -> {lt : Level}
+     -> {rt : Rype (CCons c lh rh) lt}
+     -> (tp : Term c (lmax lh lt) (RForm (FPair rh rt)))
+     -> {lb : Level}
+     -> {rb : Rype (CCons c (lmax lh lt) (RForm (FPair rh rt))) lb}
+     -> (tr : Term (CCons c (lmax lh lt) (RForm (FPair rh rt))) lb rb)
+     -> Term c lb (substituteRype rb tp ITop)
+-}
+
+data Term where
+    TWeaken : {c : Ctx}
+           -> {lt : Level}
+           -> {rt : Rype c lt}
+           -> Term c lt rt
+           -> {ld : Level}
+           -> {rd : Rype c ld}
+           -> Term (CCons c ld rd) lt (RWeaken rt)
+
+    TUnit : {c : Ctx}
+         -> Term c LZero (RForm FUnit)
+    TFunc : {c : Ctx}
+         -> {la : Level}
+         -> {ra : Rype c la}
+         -> {lb : Level}
+         -> {rb : Rype (CCons c la ra) lb}
+         -> Term (CCons c la ra) lb rb
+         -> Term c (lmax la lb) (RForm (FFunc ra rb))
+    TPair : {c : Ctx}
+         -> {lh : Level}
+         -> {rh : Rype c lh}
+         -> {lt : Level}
+         -> {rt : Rype (CCons c lh rh) lt}
+         -> (th : Term c lh rh)
+         -> (tt : Term c lt (substituteRype rt th ITop))
+         -> Term c (lmax lh lt) (RForm (FPair rh rt))
+
+    TEmbedForm : {c : Ctx}
+              -> {l : Level}
+              -> Form c l
+              -> Term c (LSucc l) (RForm (FRype l))
+
+    TEmbedElim : {c : Ctx}
+              -> {l : Level}
+              -> {r : Rype c l}
+              -> Elim c l r
+              -> Term c l r
+
+{-
+rypeToTerm : {c : Ctx}
+          -> {l : Level}
+          -> {r : Rype c l}
+          -> Term c (LSucc l) (RForm (FRype l))
+rypeToTerm (RWeaken r) = 
+rypeToTerm (RForm f) = TEmbedForm f
+-}
+
 
 data Elim where
     EVar : {c : Ctx}
@@ -362,41 +433,27 @@ data Elim where
          -> (ta : Term c la ra)
          -> Elim c lb (substituteRype rb ta ITop)
 
-data Term where
-    TWeaken : {c : Ctx}
-           -> {lt : Level}
-           -> {rt : Rype c lt}
-           -> Term c lt rt
-           -> {ld : Level}
-           -> {rd : Rype c ld}
-           -> Term (CCons c ld rd) lt (RWeaken rt)
-
-    TUnit : {c : Ctx}
-         -> Term c LZero (RForm FUnit)
-    TFunc : {c : Ctx}
-         -> {la : Level}
-         -> {ra : Rype c la}
+    {-
+    EPair : {c : Ctx}
+         -> {lh : Level}
+         -> {rh : Rype c lh}
+         -> {lt : Level}
+         -> {rt : Rype (CCons c lh rh) lt}
+         -> (ep : Elim c (lmax lh lt) (RForm (FPair rh rt)))
          -> {lb : Level}
-         -> {rb : Rype (CCons c la ra) lb}
-         -> Term (CCons c la ra) lb rb
-         -> Term c (lmax la lb) (RForm (FFunc ra rb))
+         -> {rb : Rype (CCons (CCons c lh rh) lt rt) lb}
+         -> (tb : Term (CCons (CCons c lh rh) lt rt) lb rb)
+         -> Elim c lb (RElim (EPair ep (rypeToTerm rb)))
+    -}
 
-    TEmbedForm : {c : Ctx}
-              -> {l : Level}
-              -> Form c l
-              -> Term c (LSucc l) (RForm (FRype l))
-
-    TEmbedElim : {c : Ctx}
-              -> {l : Level}
-              -> {r : Rype c l}
-              -> Elim c l r
-              -> Term c l r
 
 
 neverElim (TEmbedElim e) = e
 
 tapp (TFunc rb) ta = substituteTerm rb ta ITop
 tapp (TEmbedElim ef) ta = TEmbedElim (EFunc ef ta)
+
+--tbust (TPair th tt) tb = substituteTerm 
 
 intoRype (TEmbedForm f) = RForm f
 intoRype (TEmbedElim e) = RElim e
@@ -407,7 +464,6 @@ substituteElim (EAbort en rb) tv i =
     let sen = neverElim (substituteElim en tv i) in
     let srb = substituteRype rb tv i in
     TEmbedElim (EAbort sen srb)
-
 substituteElim (EFunc ef ta) tv i =
     let stf = substituteElim ef tv i in
     let sta = substituteTerm ta tv i in
@@ -416,6 +472,13 @@ substituteElim (EFunc ef ta) tv i =
     let same1 = cong1ImplHet same0 in
     let same2 = heteroToHomo same1 in
     transport same2 got
+{-
+substituteElim (EPair ep tr) tv i =
+    let stp = substituteElim ep tv i in
+    let str = substituteTerm tr tv (IPop i) in
+    let got = tbust stp str
+    got
+-}
 
 
 
@@ -425,6 +488,13 @@ substituteTerm TUnit tv i = TUnit
 substituteTerm (TFunc tb) tv i = 
     let stb = substituteTerm tb tv (IPop i) in
     TFunc stb
+substituteTerm (TPair th tt) tv i =
+    let sth = substituteTerm th tv i in
+    let stt = substituteTerm tt tv i in
+    let same0 = reorderRype ITop i in
+    let same1 = cong1ImplHet same0 in
+    let same2 = heteroToHomo same1 in
+    TPair sth (transport same2 stt)
 substituteTerm (TEmbedForm f) tv i = TEmbedForm (substituteForm f tv i)
 substituteTerm (TEmbedElim e) tv i = substituteElim e tv i
 
@@ -447,6 +517,10 @@ reorderTerm {_} {_} {_} {TFunc tb} ITop iy =
     cong1ImplHet (reorderTerm ITop iy)
 reorderTerm {_} {_} {_} {TFunc tb} (IPop ix) iy =
     cong1ImplHet (reorderTerm (IPop ix) iy)
+reorderTerm {_} {_} {_} {TPair th tt} ITop iy =
+    cong2ImplHet (reorderTerm ITop iy) (reorderTerm ITop iy)
+reorderTerm {_} {_} {_} {TPair tt th} (IPop ix) iy =
+    cong2ImplHet (reorderTerm (IPop ix) iy) (reorderTerm (IPop ix) iy)
 reorderTerm {_} {_} {_} {TEmbedForm f} ITop iy =
     cong1ImplHet (reorderForm ITop iy)
 reorderTerm {_} {_} {_} {TEmbedForm f} (IPop ix) iy =
