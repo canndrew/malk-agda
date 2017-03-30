@@ -26,6 +26,11 @@ cong2ImplHet : ∀ {a b c} {A : Set a} {B : A → Set b} {C : ∀ x → B x → 
         {f : (x : A) (y : B x) → C x y} → x === y → u === v → f x u === f y v
 cong2ImplHet refl refl = refl
 
+cong2HetAiAe : ∀ {a b c} {A : Set a} {B : A → Set b} {C : ∀ x → B x → Set c}
+          {x y u v}
+        (f : {x : A} (y : B x) → C x y) → x === y → u === v → f {x} u === f {y} v
+cong2HetAiAe f refl refl = refl
+
 cong3Het : ∀ {a b c d} {A : Set a} {B : A → Set b} {C : ∀ x → B x → Set c} {D : ∀ x -> ∀ y -> C x y -> Set d}
           {x y u v p q}
         (f : (x : A) (y : B x) → (z : C x y) -> D x y z) → x === y → u === v → p === q -> f x u p === f y v q

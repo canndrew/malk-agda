@@ -646,6 +646,19 @@ undoWeakenType : {c : Ctx}
               -> UndoWeaken w i
               -> r === (substituteType (weakenType r w) tv i)
 
+
+undoWeakenForm : {c : Ctx}
+              -> {cv : Ctx}
+              -> {lv : Level}
+              -> {rv : Type cv lv}
+              -> {tv : Term cv lv rv}
+              -> {l : Level}
+              -> (f : Form c l)
+              -> {w : Weakenable c rv}
+              -> {i : In (weakenCtx c w) rv}
+              -> UndoWeaken w i
+              -> f === (substituteForm (weakenForm f w) tv i)
+
 undoWeakenCtx c UTop = refl
 undoWeakenCtx (CCons c lt rt) {cv} {lv} {rv} {tv} {WPop w} {IPop i} (UPop u) =
     let aa : (c === (substituteCtx (weakenCtx c w) tv i))
@@ -656,7 +669,56 @@ undoWeakenCtx (CCons c lt rt) {cv} {lv} {rv} {tv} {WPop w} {IPop i} (UPop u) =
     in
     bb
 
-undoWeakenType r u = ?
+undoWeakenElim : {c : Ctx}
+              -> {cv : Ctx}
+              -> {lv : Level}
+              -> {rv : Type cv lv}
+              -> {tv : Term cv lv rv}
+              -> {l : Level}
+              -> {r : Type c l}
+              -> (e : Elim c l r)
+              -> {w : Weakenable c rv}
+              -> {i : In (weakenCtx c w) rv}
+              -> UndoWeaken w i
+              -> (TEmbedElim e) === (substituteElim (weakenElim e w) tv i)
+
+undoWeakenTerm : {c : Ctx}
+              -> {cv : Ctx}
+              -> {lv : Level}
+              -> {rv : Type cv lv}
+              -> {tv : Term cv lv rv}
+              -> {l : Level}
+              -> {r : Type c l}
+              -> (t : Term c l r)
+              -> {w : Weakenable c rv}
+              -> {i : In (weakenCtx c w) rv}
+              -> UndoWeaken w i
+              -> t === (substituteTerm (weakenTerm t w) tv i)
+
+undoWeakenType {c} {cv} {lv} {rv} {tv} {l} (RForm f) {w} {i} u =
+    let undoneForm : f === (substituteForm (weakenForm f w) tv i)
+        undoneForm = undoWeakenForm f u
+    in
+    let undoneCtx : c === (substituteCtx (weakenCtx c w) tv i)
+        undoneCtx = undoWeakenCtx c u
+    in
+    let res : (RForm {c} {l} f) === (RForm {substituteCtx (weakenCtx c w) tv i} {l} (substituteForm (weakenForm f w) tv i))
+        res = cong2HetAiAe RForm undoneCtx undoneForm
+    in
+    res
+undoWeakenType {c} {cv} {lv} {rv} {tv} {l} (RElim e) {w} {i} u =
+    let undoneElim : (TEmbedElim e) === (substituteElim (weakenElim e w) tv i)
+        undoneElim = undoWeakenElim e u
+    in
+    let undoneCtx : c === (substituteCtx (weakenCtx c w) tv i)
+        undoneCtx = undoWeakenCtx c u
+    in
+    let res : (RElim e) === intoType (substituteElim (weakenElim e w) tv i)
+        res = cong2HetAiAe intoType undoneCtx undoneElim
+    in
+    res
+
+undoWeakenForm f u = ?
 
 extractType : {c : Ctx}
            -> {cv : Ctx}
@@ -811,19 +873,6 @@ weakenElim (EVar i) w = EVar ?
 weakenElim (EAbort ev r) w = EAbort (weakenElim ev w) (weakenType r w)
 weakenElim (EFunc ef ta) w = ? -- EFunc (weakenElim ef w) (weakenTerm ta w)
 
-undoWeakenElim : {c : Ctx}
-              -> {cv : Ctx}
-              -> {lv : Level}
-              -> {rv : Type cv lv}
-              -> {tv : Term cv lv rv}
-              -> {l : Level}
-              -> {r : Type c l}
-              -> (e : Elim c l r)
-              -> {w : Weakenable c rv}
-              -> {i : In (weakenCtx c w) rv}
-              -> UndoWeaken w i
-              -> e === (substituteElim (weakenElim e w) tv i)
-
 undoWeakenElim e u = ?
 
 weakenTerm TUnit w = TUnit
@@ -831,19 +880,6 @@ weakenTerm (TFunc ta) w = TFunc (weakenTerm ta (WPop w))
 --weakenTerm (TPair th tt) w = TPair (weakenTerm th w) (weakenTerm tt w)
 weakenTerm (TEmbedForm f) w = TEmbedForm (weakenForm f w)
 weakenTerm (TEmbedElim e) w = TEmbedElim (weakenElim e w)
-
-undoWeakenTerm : {c : Ctx}
-              -> {cv : Ctx}
-              -> {lv : Level}
-              -> {rv : Type cv lv}
-              -> {tv : Term cv lv rv}
-              -> {l : Level}
-              -> {r : Type c l}
-              -> (t : Term c l r)
-              -> {w : Weakenable c rv}
-              -> {i : In (weakenCtx c w) rv}
-              -> UndoWeaken w i
-              -> t === (substituteTerm (weakenTerm t w) tv i)
 
 undoWeakenTerm t u = ?
 
