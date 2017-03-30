@@ -15,7 +15,7 @@ open import Eqs
 -- PLAN:
 --  * Finish implementing sigma types
 --  * Add recursive types (with sizes) and identity types
---  * Add support for linear-dependent types a.la. Connor McBride's 'Rig' paper
+--  * Add support for linear-dependent types a.la. Conor McBride's 'Rig' paper
 --  * Reflect universe levels back into the type system a.la. Agda
 --  * Build an awesome programming language with this.
 --  * Cubical types.
@@ -718,7 +718,37 @@ undoWeakenType {c} {cv} {lv} {rv} {tv} {l} (RElim e) {w} {i} u =
     in
     res
 
-undoWeakenForm f u = ?
+--undoWeakenForm f u = ?
+undoWeakenForm {c} {cv} {lv} {rv} {tv} (FType l) {w} {i} u =
+    let undoneCtx : c === (substituteCtx (weakenCtx c w) tv i)
+        undoneCtx = undoWeakenCtx c u
+    in
+    cong2HetAiAe FType undoneCtx refl
+undoWeakenForm {c} {cv} {lv} {rv} {tv} FNever {w} {i} u =
+    let undoneCtx : c === (substituteCtx (weakenCtx c w) tv i)
+        undoneCtx = undoWeakenCtx c u
+    in
+    cong2HetAiAi FNever undoneCtx refl
+undoWeakenForm {c} {cv} {lv} {rv} {tv} FUnit {w} {i} u =
+    let undoneCtx : c === (substituteCtx (weakenCtx c w) tv i)
+        undoneCtx = undoWeakenCtx c u
+    in
+    cong2HetAiAi FUnit undoneCtx refl
+undoWeakenForm {c} {cv} {lv} {rv} {tv} (FFunc ra rb) {w} {i} u =
+    let undoneCtx : c === (substituteCtx (weakenCtx c w) tv i)
+        undoneCtx = undoWeakenCtx c u
+    in
+    let undoneArg : ra === (substituteType (weakenType ra w) tv i)
+        undoneArg = undoWeakenType ra u
+    in
+    let undoneBody : rb === (substituteType (weakenType rb (WPop w)) tv (IPop i))
+        --undoneBody = undoWeakenType rb (UPop u)
+        undoneBody = ?
+    in
+    --cong3HetAiAeAe undoneCtx undoneArg undoneBody
+    ?
+
+
 
 extractType : {c : Ctx}
            -> {cv : Ctx}
