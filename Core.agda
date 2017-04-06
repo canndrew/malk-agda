@@ -46,6 +46,13 @@ data Type : Ctx -> Level -> Set
 -- Proofs that a type is in a context. Used for substitutions.
 data In : (c : Ctx) -> {cv : Ctx} -> {lv : Level} -> (Type cv lv) -> Set
 
+-- Proofs that a context can be weakened by inserting the given type
+data Weakenable : (c : Ctx)
+               -> {cd : Ctx}
+               -> {ld : Level}
+               -> (rd : Type cd ld)
+               -> Set
+
 -- Elimation terms. These are seperated from terms so that we can keep
 -- everything in normal form. For example, for the term
 -- (funcApplication someFunction someArg) we need someFunction to not be a
@@ -107,6 +114,60 @@ substituteElim : {ce : Ctx}
               -> (tv : Term cv lv rv)
               -> (i : In ce rv)
               -> Term (substituteCtx ce tv i) le (substituteType re tv i)
+
+weakenCtx : {cd : Ctx}
+         -> {ld : Level}
+         -> {rd : Type cd ld}
+         -> (c : Ctx)
+         -> (w : Weakenable c rd)
+         -> Ctx
+
+weakenForm : {cd : Ctx}
+          -> {ld : Level}
+          -> {rd : Type cd ld}
+          -> {c : Ctx}
+          -> {l : Level}
+          -> (f : Form c l)
+          -> (w : Weakenable c rd)
+          -> Form (weakenCtx c w) l
+
+weakenType : {cd : Ctx}
+          -> {ld : Level}
+          -> {rd : Type cd ld}
+          -> {c : Ctx}
+          -> {l : Level}
+          -> (r : Type c l)
+          -> (w : Weakenable c rd)
+          -> Type (weakenCtx c w) l
+
+weakenElim : {cd : Ctx}
+          -> {ld : Level}
+          -> {rd : Type cd ld}
+          -> {c : Ctx}
+          -> {l : Level}
+          -> {r : Type c l}
+          -> (e : Elim c l r)
+          -> (w : Weakenable c rd)
+          -> Elim (weakenCtx c w) l (weakenType r w)
+
+weakenTerm : {cd : Ctx}
+          -> {ld : Level}
+          -> {rd : Type cd ld}
+          -> {c : Ctx}
+          -> {l : Level}
+          -> {r : Type c l}
+          -> (t : Term c l r)
+          -> (w : Weakenable c rd)
+          -> Term (weakenCtx c w) l (weakenType r w)
+
+-- Proofs that the given weaking and substitution are inverses.
+data UndoWeaken : {c : Ctx}
+               -> {cv : Ctx}
+               -> {lv : Level}
+               -> {rv : Type cv lv}
+               -> (w : Weakenable c rv)
+               -> In (weakenCtx c w) rv
+               -> Set
 
 data Ctx where
     CNil : Ctx
@@ -206,8 +267,22 @@ data In where
         -> In c rv
         -> In (CCons c ld rd) rv
 
+data Weakenable where
+    WTop : {c : Ctx}
+        -> {ld : Level}
+        -> {rd : Type c ld}
+        -> Weakenable c rd
+    WPop : {c : Ctx}
+        -> {cd : Ctx}
+        -> {ld : Level}
+        -> {rd : Type cd ld}
+        -> {lt : Level}
+        -> {rt : Type c lt}
+        -> Weakenable c rd
+        -> Weakenable (CCons c lt rt) rd
+
 substituteCtx (CCons cr lv rv) tv ITop = cr
-substituteCtx (CCons cr ld rd) tv (IPop i) = CCons (substituteCtx cr tv i) ld (substituteType rd tv i)
+substituteCtx (CCons cr ld rd) tv (IPop i) = {!  !} -- CCons (substituteCtx cr tv i) ld (substituteType rd tv i)
 
 
 
@@ -354,35 +429,6 @@ reorderTerm : {c : Ctx}
               (substituteTerm (substituteTerm t ty (broadenPre ix iy)) (substituteTerm tx ty iy) (broadenStill ix iy))
 
 
-reorderCtx ITop iy = refl
-reorderCtx {CCons c ld rd} {cx} {lx} {rx} {tx} (IPop ix) {cy} {ly} {ry} {ty} iy =
-    let scXY : Ctx
-        scXY = (substituteCtx (substituteCtx c tx ix) ty (broadenPost ix iy))
-    in
-    let scYX : Ctx
-        scYX = (substituteCtx (substituteCtx c ty (broadenPre ix iy)) (substituteTerm tx ty iy) (broadenStill ix iy))
-    in
-    let floo : scXY ≡ scYX
-        floo = reorderCtx ix iy
-    in
-    let flooz : scXY === scYX
-        flooz = homoToHetero floo
-    in
-    let srdXY : Type scXY ld
-        srdXY = substituteType (substituteType rd tx ix) ty (broadenPost ix iy)
-    in
-    let srdYX : Type scYX ld
-        srdYX = substituteType (substituteType rd ty (broadenPre ix iy)) (substituteTerm tx ty iy) (broadenStill ix iy)
-    in
-    let resrd : srdXY === srdYX
-        resrd = reorderType ix iy
-    in
-    let bong : (CCons scXY ld srdXY) === (CCons scYX ld srdYX)
-        bong = cong3Het CCons flooz refl resrd
-    in
-    heteroToHomo bong
-
-
 intoType : {c : Ctx}
         -> {l : Level}
         -> Term c (LSucc l) (RForm (FType l)) -> Type c l
@@ -391,40 +437,11 @@ intoType : {c : Ctx}
 substituteForm (FType l) tv i = FType l
 substituteForm FNever tv i = FNever
 substituteForm FUnit tv i = FUnit
-substituteForm (FFunc ra rb) tv i = FFunc (substituteType ra tv i) (substituteType rb tv (IPop i))
+substituteForm (FFunc ra rb) tv i = {!  !} -- FFunc (substituteType ra tv i) (substituteType rb tv (IPop i)) --FFunc (substituteType ra tv i) (substituteType rb tv (IPop i))
 --substituteForm (FPair rh rt) tv i = FPair (substituteType rh tv i) (substituteType rt tv (IPop i))
 
-substituteType (RForm f) tv i = RForm (substituteForm f tv i)
-substituteType (RElim e) tv i = intoType (substituteElim e tv i)
-
-
-reorderForm {_} {_} {FType l} ITop iy = refl
-reorderForm {_} {_} {FType l} (IPop ix) iy = refl
-reorderForm {c} {l} {FNever} ITop iy = refl
-reorderForm {c} {l} {FNever} (IPop ix) iy = refl
-reorderForm {c} {l} {FUnit} ITop iy = refl
-reorderForm {c} {l} {FUnit} (IPop ix) iy = refl
-reorderForm {c} {_} {FFunc ra rb} ITop iy =
-    cong2ImplHet (reorderForm ITop iy) (reorderForm (IPop ITop) iy)
-reorderForm {c} {_} {FFunc ra rb} (IPop ix) iy =
-    cong2ImplHet (reorderForm (IPop ix) iy) (reorderForm (IPop (IPop ix)) iy)
-{-
-reorderForm {c} {_} {FPair rh rt} ITop iy =
-    cong2ImplHet (reorderForm ITop iy) (reorderForm (IPop ITop) iy)
-reorderForm {c} {_} {FPair rh rt} (IPop ix) iy =
-    cong2ImplHet (reorderForm (IPop ix) iy) (reorderForm (IPop (IPop ix)) iy)
--}
-
-reorderType {_} {_} {RForm x} ITop iy =
-    cong1ImplHet (reorderForm ITop iy)
-reorderType {_} {_} {RForm x} (IPop ix) iy =
-    cong1ImplHet (reorderForm (IPop ix) iy)
-reorderType {_} {l} {RElim x} ITop iy =
-    cong1ImplHet (reorderElim ITop iy)
-reorderType {_} {l} {RElim x} (IPop ix) iy =
-    cong1ImplHet (reorderElim (IPop ix) iy)
-    
-
+substituteType (RForm f) tv i = {!  !} -- RForm (substituteForm f tv i)
+substituteType (RElim e) tv i = {!  !} -- intoType (substituteElim e tv i) --intoType (substituteElim e tv i)
 
 -- A term of type never must be an elimination.
 neverElim : {c : Ctx}
@@ -496,6 +513,98 @@ data Term where
               -> Elim c l r
               -> Term c l r
 
+reorderCtx ITop iy = refl
+reorderCtx {CCons c ld rd} {cx} {lx} {rx} {tx} (IPop ix) {cy} {ly} {ry} {ty} iy = {!  !}
+{-
+reorderCtx {CCons c ld rd} {cx} {lx} {rx} {tx} (IPop ix) {cy} {ly} {ry} {ty} iy =
+    let scXY : Ctx
+        scXY = {! !}
+    in
+
+
+    let scXY : Ctx
+        scXY = (substituteCtx (substituteCtx c tx ix) ty (broadenPost ix iy))
+    in
+    let scYX : Ctx
+        scYX = (substituteCtx (substituteCtx c ty (broadenPre ix iy)) (substituteTerm tx ty iy) (broadenStill ix iy))
+    in
+    let floo : scXY ≡ scYX
+        floo = reorderCtx ix iy
+    in
+    let flooz : scXY === scYX
+        flooz = homoToHetero floo
+    in
+    let srdXY : Type scXY ld
+        srdXY = substituteType (substituteType rd tx ix) ty (broadenPost ix iy)
+    in
+    let srdYX : Type scYX ld
+        srdYX = substituteType (substituteType rd ty (broadenPre ix iy)) (substituteTerm tx ty iy) (broadenStill ix iy)
+    in
+    let resrd : srdXY === srdYX
+        resrd = reorderType ix iy
+    in
+    let bong : (CCons scXY ld srdXY) === (CCons scYX ld srdYX)
+        bong = cong3Het CCons flooz refl resrd
+    in
+    let bang : (CCons scXY ld srdXY) ≡ (CCons scYX ld srdYX)
+        bang = heteroToHomo bong
+    in
+    let smeg0 = (substituteCtx (substituteCtx (CCons c ld rd) tx (IPop ix)) ty (broadenPost (IPop ix) iy)) ≡
+                (substituteCtx (substituteCtx (CCons c ld rd) ty (broadenPre (IPop ix) iy)) (substituteTerm tx ty iy) (broadenStill (IPop ix) iy))
+    in
+    let x0 = {! smeg0 !} in
+    let smeg1 = (substituteCtx (substituteCtx (CCons c ld rd) ty (broadenPre (IPop ix) iy)) (substituteTerm tx ty iy) (broadenStill (IPop ix) iy))
+    in
+    let x1 = {! smeg1 !} in
+    let smeg2 = (broadenStill (IPop ix) iy)
+    in
+    let x2 = {! smeg2 !} in
+    let fukko = (substituteCtx (substituteCtx (CCons c ld rd) ty (broadenPre (IPop ix) iy)) {! !} {!  !})
+    in
+    let fukkong : Ctx
+        fukkong = {!  !}
+    in
+    let chunk : (substituteCtx (substituteCtx (CCons c ld rd) tx (IPop ix)) ty (broadenPost (IPop ix) iy)) ≡
+                (substituteCtx (substituteCtx (CCons c ld rd) ty (broadenPre (IPop ix) iy)) (substituteTerm tx ty iy) (broadenStill (IPop ix) iy))
+        chunk = ? --bang
+    in
+    chunk
+-}
+
+
+
+reorderForm {_} {_} {FType l} ITop iy = refl
+reorderForm {_} {_} {FType l} (IPop ix) iy = ? --refl
+reorderForm {c} {l} {FNever} ITop iy = refl
+reorderForm {c} {l} {FNever} (IPop ix) iy = ? --refl
+reorderForm {c} {l} {FUnit} ITop iy = refl
+reorderForm {c} {l} {FUnit} (IPop ix) iy = ? --refl
+reorderForm {c} {_} {FFunc ra rb} ITop iy =
+    cong2ImplHet (reorderForm ITop iy) (reorderForm (IPop ITop) iy)
+reorderForm {c} {_} {FFunc ra rb} (IPop ix) iy =
+    ?
+    --cong2ImplHet (reorderForm (IPop ix) iy) (reorderForm (IPop (IPop ix)) iy)
+{-
+reorderForm {c} {_} {FPair rh rt} ITop iy =
+    cong2ImplHet (reorderForm ITop iy) (reorderForm (IPop ITop) iy)
+reorderForm {c} {_} {FPair rh rt} (IPop ix) iy =
+    cong2ImplHet (reorderForm (IPop ix) iy) (reorderForm (IPop (IPop ix)) iy)
+-}
+
+reorderType {_} {_} {RForm x} ITop iy =
+    cong1ImplHet (reorderForm ITop iy)
+reorderType {_} {_} {RForm x} (IPop ix) iy =
+    ?
+    --cong1ImplHet (reorderForm (IPop ix) iy)
+reorderType {_} {l} {RElim x} ITop iy =
+    ?
+    --cong1ImplHet (reorderElim ITop iy)
+reorderType {_} {l} {RElim x} (IPop ix) iy =
+    ?
+    --cong1ImplHet (reorderElim (IPop ix) iy)
+    
+
+
 {-
 typeToTerm : {c : Ctx}
           -> {l : Level}
@@ -503,71 +612,6 @@ typeToTerm : {c : Ctx}
           -> Term c (LSucc l) (RForm (FType l))
 typeToTerm (RForm f) = TEmbedForm f
 -}
-
-data Weakenable : (c : Ctx)
-               -> {cd : Ctx}
-               -> {ld : Level}
-               -> (rd : Type cd ld)
-               -> Set
-
-data Weakenable where
-    WTop : {c : Ctx}
-        -> {ld : Level}
-        -> {rd : Type c ld}
-        -> Weakenable c rd
-    WPop : {c : Ctx}
-        -> {cd : Ctx}
-        -> {ld : Level}
-        -> {rd : Type cd ld}
-        -> {lt : Level}
-        -> {rt : Type c lt}
-        -> Weakenable c rd
-        -> Weakenable (CCons c lt rt) rd
-
-weakenCtx : {cd : Ctx}
-         -> {ld : Level}
-         -> {rd : Type cd ld}
-         -> (c : Ctx)
-         -> (w : Weakenable c rd)
-         -> Ctx
-
-weakenForm : {cd : Ctx}
-          -> {ld : Level}
-          -> {rd : Type cd ld}
-          -> {c : Ctx}
-          -> {l : Level}
-          -> (f : Form c l)
-          -> (w : Weakenable c rd)
-          -> Form (weakenCtx c w) l
-
-weakenType : {cd : Ctx}
-          -> {ld : Level}
-          -> {rd : Type cd ld}
-          -> {c : Ctx}
-          -> {l : Level}
-          -> (r : Type c l)
-          -> (w : Weakenable c rd)
-          -> Type (weakenCtx c w) l
-
-weakenElim : {cd : Ctx}
-          -> {ld : Level}
-          -> {rd : Type cd ld}
-          -> {c : Ctx}
-          -> {l : Level}
-          -> {r : Type c l}
-          -> (e : Elim c l r)
-          -> (w : Weakenable c rd)
-          -> Elim (weakenCtx c w) l (weakenType r w)
-
-weakenTerm : {cd : Ctx}
-          -> {ld : Level}
-          -> {rd : Type cd ld}
-          -> {c : Ctx}
-          -> {l : Level}
-          -> {r : Type c l}
-          -> (t : Term c l r)
-          -> (w : Weakenable c rd)
-          -> Term (weakenCtx c w) l (weakenType r w)
 
 
 {-
@@ -586,24 +630,21 @@ weakenIn : {cd : Ctx}
 weakenCtx {ld = ld} {rd = rd} c WTop = CCons c ld rd
 weakenCtx (CCons c lt rt) (WPop w) = CCons (weakenCtx c w) lt (weakenType rt w)
 
-data UndoWeaken : {c : Ctx}
-               -> {cv : Ctx}
-               -> {lv : Level}
-               -> {rv : Type cv lv}
-               -> (w : Weakenable c rv)
-               -> In (weakenCtx c w) rv
-               -> Set
-
 data UndoWeaken where
-    UTop : UndoWeaken WTop ITop
+    UTop : {c : Ctx}
+        -> {ld : Level}
+        -> {rd : Type c ld}
+        -> UndoWeaken (WTop {c} {ld} {rd}) ITop
     UPop : {c : Ctx}
         -> {cv : Ctx}
         -> {lv : Level}
         -> {rv : Type cv lv}
         -> {w : Weakenable c rv}
         -> {i : In (weakenCtx c w) rv}
+        -> {lt : Level}
+        -> {rt : Type c lt}
         -> UndoWeaken w i
-        -> UndoWeaken (WPop w) (IPop i)
+        -> UndoWeaken (WPop {c} {cv} {lv} {rv} {lt} {rt} w) (IPop i)
 
 {-
 weakSubTopCtx : (c : Ctx)
@@ -718,7 +759,6 @@ undoWeakenType {c} {cv} {lv} {rv} {tv} {l} (RElim e) {w} {i} u =
     in
     res
 
---undoWeakenForm f u = ?
 undoWeakenForm {c} {cv} {lv} {rv} {tv} (FType l) {w} {i} u =
     let undoneCtx : c === (substituteCtx (weakenCtx c w) tv i)
         undoneCtx = undoWeakenCtx c u
@@ -734,7 +774,7 @@ undoWeakenForm {c} {cv} {lv} {rv} {tv} FUnit {w} {i} u =
         undoneCtx = undoWeakenCtx c u
     in
     cong2HetAiAi FUnit undoneCtx refl
-undoWeakenForm {c} {cv} {lv} {rv} {tv} (FFunc ra rb) {w} {i} u =
+undoWeakenForm {c} {cv} {lv} {rv} {tv} (FFunc {.c} {la} ra {lb} rb) {w} {i} u =
     let undoneCtx : c === (substituteCtx (weakenCtx c w) tv i)
         undoneCtx = undoWeakenCtx c u
     in
@@ -742,11 +782,9 @@ undoWeakenForm {c} {cv} {lv} {rv} {tv} (FFunc ra rb) {w} {i} u =
         undoneArg = undoWeakenType ra u
     in
     let undoneBody : rb === (substituteType (weakenType rb (WPop w)) tv (IPop i))
-        --undoneBody = undoWeakenType rb (UPop u)
-        undoneBody = ?
+        undoneBody = undoWeakenType {CCons c la ra} {cv} {lv} {rv} {tv} {lb} rb {WPop w} {IPop i} (UPop {c} {cv} {lv} {rv} {w} {i} {la} {ra} u)
     in
-    --cong3HetAiAeAe undoneCtx undoneArg undoneBody
-    ?
+    cong5HetAiAiAeAiAe FFunc undoneCtx refl undoneArg refl undoneBody
 
 
 
@@ -812,16 +850,13 @@ intoType (TEmbedElim e) = RElim e
 
 --substituteElim {.(CCons cv lv rv)} {.lv} {.(extractType ITop)} (EVar {.(CCons cv lv rv)} {.cv} {.lv} {.rv} (ITop {.cv} {.lv} {.rv})) {cv} {lv} {rv} tv (ITop {,cv} {,lv} {,rv}) = tv
 substituteElim (EVar ITop) {cv} {lv} {rv} tv ITop =
-    {-
     let typeTrans : rv === substituteType (weakenType rv WTop) tv ITop
-        typeTrans = undoWeakenType rv (UTop {})
+        typeTrans = undoWeakenType rv (UTop {cv} {lv} {rv})
     in
     let wub : Term cv lv rv === Term cv lv (substituteType (weakenType rv WTop) tv ITop)
         wub = cong1Het (Term cv lv) typeTrans
     in
     transport (heteroToHomo wub) tv
-    -}
-    ?
 substituteElim (EVar (IPop j)) tv ITop = ? -- TEmbedElim (EVar j)
 substituteElim (EVar ITop) tv (IPop i) = ? -- TEmbedElim (EVar ITop)
 substituteElim (EVar (IPop j)) tv (IPop i) = ? --weakenTerm (substituteElim (EVar j) tv i) WTop
@@ -868,20 +903,25 @@ reorderElim {_} {_} {_} {EVar (IPop j)} ITop iy = ?
 reorderElim {_} {_} {_} {EVar ITop} (IPop ix) iy = ?
 reorderElim {_} {_} {_} {EVar (IPop j)} (IPop ix) iy = ?
 reorderElim {_} {_} {_} {EAbort e r} ITop iy =
-    cong2ImplHet (cong1Het neverElim (reorderElim ITop iy)) (reorderType ITop iy)
+    ?
+    --cong2ImplHet (cong1Het neverElim (reorderElim ITop iy)) (reorderType ITop iy)
 reorderElim {_} {_} {_} {EAbort e r} (IPop ix) iy =
-    cong2ImplHet (cong1Het neverElim (reorderElim (IPop ix) iy)) (reorderType (IPop ix) iy)
+    ?
+    --cong2ImplHet (cong1Het neverElim (reorderElim (IPop ix) iy)) (reorderType (IPop ix) iy)
 reorderElim {_} {_} {_} {EFunc e ta} ITop iy =
-    cong2ImplHet (reorderElim ITop iy) (reorderTerm ITop iy)
+    ?
+    --cong2ImplHet (reorderElim ITop iy) (reorderTerm ITop iy)
 reorderElim {_} {_} {_} {EFunc e ta} (IPop ix) iy = ?
     cong2ImplHet (reorderElim (IPop ix) iy) (reorderTerm (IPop ix) iy)
 
 reorderTerm {_} {_} {_} {TUnit} ITop iy = refl
-reorderTerm {_} {_} {_} {TUnit} (IPop ix) iy = refl
+reorderTerm {_} {_} {_} {TUnit} (IPop ix) iy = ? --refl
 reorderTerm {_} {_} {_} {TFunc tb} ITop iy = 
-    cong1ImplHet (reorderTerm ITop iy)
-reorderTerm {_} {_} {_} {TFunc tb} (IPop ix) iy =
-    cong1ImplHet (reorderTerm (IPop ix) iy)
+    ?
+    --cong1ImplHet (reorderTerm ITop iy)
+reorderTerm {CCons c ld rd} {.(lmax la lb)} {RForm (FFunc ra rb)} {TFunc {.(CCons c ld rd)} {la} {.ra} {lb} {.rb} tb} {cx} {lx} {rx} {tx} (IPop {.c} {.ld} {.rd} {.cx} {.lx} {.rx} ix) {cy} {ly} {ry} {ty} iy =
+    ?
+    --cong1ImplHet (reorderTerm (IPop ix) iy)
 {-
 reorderTerm {_} {_} {_} {TPair th tt} ITop iy =
     cong2ImplHet (reorderTerm ITop iy) (reorderTerm ITop iy)
@@ -891,7 +931,8 @@ reorderTerm {_} {_} {_} {TPair tt th} (IPop ix) iy =
 reorderTerm {_} {_} {_} {TEmbedForm f} ITop iy =
     cong1ImplHet (reorderForm ITop iy)
 reorderTerm {_} {_} {_} {TEmbedForm f} (IPop ix) iy =
-    cong1ImplHet (reorderForm (IPop ix) iy)
+    ?
+    --cong1ImplHet (reorderForm (IPop ix) iy)
 reorderTerm {_} {_} {_} {TEmbedElim e} ITop iy =
     reorderElim ITop iy
 reorderTerm {_} {_} {_} {TEmbedElim e} (IPop ix) iy =
@@ -899,7 +940,7 @@ reorderTerm {_} {_} {_} {TEmbedElim e} (IPop ix) iy =
 
 
 
-weakenElim (EVar i) w = EVar ?
+weakenElim (EVar i) w = ? -- EVar ?
 weakenElim (EAbort ev r) w = EAbort (weakenElim ev w) (weakenType r w)
 weakenElim (EFunc ef ta) w = ? -- EFunc (weakenElim ef w) (weakenTerm ta w)
 
